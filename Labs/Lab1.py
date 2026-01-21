@@ -16,7 +16,7 @@ if not openai_api_key:
     st.info("Please add your OpenAI API key to continue.", icon="🗝️")
     st.stop()
 
-# Try validating the key immediately
+# Validating the key immediately
 try: 
     # Create an OpenAI client.
     client = OpenAI(api_key=openai_api_key)
