@@ -30,22 +30,23 @@ question = st.text_area(
     )
 
 if uploaded_file and question:
+    document = uploaded_file.read().decode("utf-8", errors="ignore")
 
-        # Process the uploaded file and question.
-        document = uploaded_file.read().decode()
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
-            }
-        ]
+    messages = [
+        {"role": "user", "content": f"Here's a document:\n\n{document}\n\n---\n\n{question}"}
+    ]
 
-        # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
+    stream = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        stream=True,
+    )
 
-        # Stream the response to the app using `st.write_stream`.
-st.write_stream((stream))
+    def stream_text(stream):
+        for event in stream:
+            delta = event.choices[0].delta.content
+            if delta:
+                yield delta
+
+    st.write_stream(stream_text(stream))
+
