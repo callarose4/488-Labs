@@ -15,8 +15,8 @@ openai_api_key = st.secrets.OPEN_API_KEY
 
 
 client = OpenAI(api_key=openai_api_key)
-st.success("API key validated")
-    
+st.success
+
     # Let the user upload a file via `st.file_uploader`.
 uploaded_file = st.file_uploader(
         "Upload a document (.txt or .md)", type=("txt", "md")
