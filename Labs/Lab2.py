@@ -27,11 +27,7 @@ uploaded_file = st.file_uploader(
         "Upload a document (.txt or .md)", type=("txt", "md")
     )
 
-    # Ask the user for a question via `st.text_area`.
-question = st.text_area(
-    placeholder="Can you give me a short summary?",
-    disabled=not uploaded_file,
-    )
+
 
 if uploaded_file:
     document = uploaded_file.read().decode("utf-8", errors="ignore")
