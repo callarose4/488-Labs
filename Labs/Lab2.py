@@ -5,10 +5,12 @@ import fitz  # PyMuPDF
 st.title("Lab 2")
 st.write("Upload a PDF below and the app will summarize it.")
 
-summary_type = st.sidebar.radio(
+summary_type = st.sidebar.selectbox(
     "Summary type",
     ["100 words", "2 connected paragraphs", "5 bullet points"]
 )
+language = st.sidebar.selectbox("Output language", ["English", "French", "Spanish"])
+
 
 use_advanced = st.sidebar.checkbox("Use advanced model")
 model = "gpt-4" if use_advanced else "gpt-4.1-nano"
@@ -37,9 +39,13 @@ if uploaded_file:
 
     messages = [{"role": "user", "content": f"{instruction}\n\nDocument:\n{document}"}]
 
+    language_instruction = f"Write the summary in {language}."
+    prompt = f"{instruction}\n{language_instruction}\n\nDocument:\n{document}"
+
+
     stream = client.chat.completions.create(
         model=model,
-        messages=messages,
+        messages=[{"role": "user", "content": prompt}],
         stream=True,
     )
 
