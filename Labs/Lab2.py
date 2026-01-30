@@ -1,48 +1,41 @@
 import streamlit as st
 from openai import OpenAI
+import fitz  # PyMuPDF
 
-# Show title and description.
 st.title("Lab 2")
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer! "
-)
+st.write("Upload a PDF below and the app will summarize it.")
+
 summary_type = st.sidebar.radio(
     "Summary type",
     ["100 words", "2 connected paragraphs", "5 bullet points"]
 )
+
 use_advanced = st.sidebar.checkbox("Use advanced model")
-model= "gpt-4" if use_advanced else "gpt-4.1-nano"
+model = "gpt-4" if use_advanced else "gpt-4.1-nano"
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.secrets.OPEN_API_KEY
-
-
-
+openai_api_key = st.secrets["OPEN_API_KEY"]  # make sure this matches your secrets key
 client = OpenAI(api_key=openai_api_key)
 
-    # Let the user upload a file via `st.file_uploader`.
-uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
+def read_pdf(uploaded_file):
+    text = ""
+    pdf = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    for page in pdf:
+        text += page.get_text()
+    return text
 
-
+uploaded_file = st.file_uploader("Upload a document (.pdf)", type=("pdf",))
 
 if uploaded_file:
-    document = uploaded_file.read().decode("utf-8", errors="ignore")
+    document = read_pdf(uploaded_file)
 
     if summary_type == "100 words":
         instruction = "Summarize the document in exactly 100 words."
     elif summary_type == "2 connected paragraphs":
         instruction = "Summarize the document in 2 connected paragraphs."
-    else: 
+    else:
         instruction = "Summarize the document in 5 concise bullet points."
 
-    messages = [
-        {"role": "user", "content": f"{instruction}\n\nDocument:\n{document}"}
-    ]
-
+    messages = [{"role": "user", "content": f"{instruction}\n\nDocument:\n{document}"}]
 
     stream = client.chat.completions.create(
         model=model,
