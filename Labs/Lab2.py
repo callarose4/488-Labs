@@ -37,10 +37,10 @@ if uploaded_file:
     else:
         instruction = "Summarize the document in 5 concise bullet points."
 
-    messages = [{"role": "user", "content": f"{instruction}\n\nDocument:\n{document}"}]
 
-    language_instruction = f"Write the summary in {language}."
-    prompt = f"{instruction}\n{language_instruction}\n\nDocument:\n{document}"
+    instruction = f"{instruction} Write the summary in {language}."
+    prompt = f"{instruction}\n\nDocument:\n{document}"
+
 
 
     stream = client.chat.completions.create(
