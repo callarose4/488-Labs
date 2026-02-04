@@ -1,6 +1,33 @@
-import tiktoken
 import streamlit as st
 from openai import OpenAI
+import tiktoken
+
+def count_tokens(messages, model_name):
+    try: 
+        enc = tiktoken.encoding_for_model(model_name)
+    except Exception:
+        enc = tiktoken.get_encoding("cl100k_base")  # fallback encoding
+    
+    total = 0 
+    for m in messages:
+        total += len(enc.encode(m.get("content", "")))
+        total += 4  # every message has a role and content, plus some overhead
+    return total
+def enforce_max_tokens(messages, model_name, max_tok):
+    # keep system if present
+    if messages and messages[0]["role"] == "system":
+        kept = [messages[0]]
+        rest = messages[1:]
+    else:
+        kept = []
+        rest = messages[:]
+
+    while rest and count_tokens(kept + rest, model_name) > max_tok:
+        rest.pop(0)  # drop oldest non-system message
+
+    return kept + rest
+
+max_tokens = st.sidebar.number_input("Max tokens to send to the model", min_value=200, max_value=8000, value=1200, step=100)    
 
 st.title("MY Lab 3 question answering chatbot")
 
@@ -19,13 +46,26 @@ if "client" not in st.session_state:
 # Initialize chat history once
 if "messages" not in st.session_state:
     st.session_state.messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
         {"role": "assistant", "content": "How can I help you?"}
     ]
 
 # Display chat history
 for msg in st.session_state.messages:
+    if msg["role"] == "system":
+        continue  # Don't display system messages   
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+def last_two_user_turns(messages):
+    # keep the first system message (if any)
+    system = [m for m in messages if m["role"] == "system"[:1]]
+    
+    # get the last two user turns
+    user_idxs = [i for i, m in enumerate(messages) if m["role"] == "user"]
+    if len (user_idxs) <= 2:
+        return system + [m for m in messages if m["role"] != "system"]
+    return system + system
 
 # User input
 prompt = st.chat_input("Ask me anything!")
@@ -36,11 +76,16 @@ if prompt:
         st.markdown(prompt)
 
     client = st.session_state.client
+    messages_to_send = last_two_user_turns(st.session_state.messages)  
+    messages_to_send = enforce_max_tokens(messages_to_send, model_to_use, max_tokens) 
     stream = client.chat.completions.create(
         model=model_to_use,
-        messages=st.session_state.messages,
+        messages=messages_to_send,
         stream=True,
     )
+
+    tokens_sent = count_tokens(messages_to_send, model_to_use)
+    st.sidebar.write(f"Tokens sent this request: {tokens_sent}")
 
     full_response = ""
     with st.chat_message("assistant"):
