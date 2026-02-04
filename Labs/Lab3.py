@@ -13,19 +13,25 @@ def count_tokens(messages, model_name):
         total += len(enc.encode(m.get("content", "")))
         total += 4  # every message has a role and content, plus some overhead
     return total
+
 def enforce_max_tokens(messages, model_name, max_tok):
-    # keep system if present
-    if messages and messages[0]["role"] == "system":
-        kept = [messages[0]]
-        rest = messages[1:]
-    else:
-        kept = []
-        rest = messages[:]
+    # Always keep one system message if present
+    system = []
+    rest = messages[:]
 
-    while rest and count_tokens(kept + rest, model_name) > max_tok:
-        rest.pop(0)  # drop oldest non-system message
+    if rest and rest[0]["role"] == "system":
+        system = [rest[0]]
+        rest = rest[1:]
 
-    return kept + rest
+    # Trim oldest non-system messages until under limit
+    while rest and count_tokens(system + rest, model_name) > max_tok:
+        rest.pop(0)
+
+    # Never return empty: at minimum return system, otherwise return a fallback user message
+    if system:
+        return system + rest if (system + rest) else system
+    return rest if rest else [{"role": "user", "content": "Hi"}]
+
 
 max_tokens = st.sidebar.number_input("Max tokens to send to the model", min_value=200, max_value=8000, value=1200, step=100)    
 
@@ -78,6 +84,7 @@ if prompt:
     client = st.session_state.client
     messages_to_send = last_two_user_turns(st.session_state.messages)  
     messages_to_send = enforce_max_tokens(messages_to_send, model_to_use, max_tokens) 
+    st.sidebar.write("Messages sent:", len(messages_to_send))
     stream = client.chat.completions.create(
         model=model_to_use,
         messages=messages_to_send,
