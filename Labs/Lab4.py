@@ -7,7 +7,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 BASE_DIR = Path(__file__).resolve().parent        
-DATA_DIR = BASE_DIR.parent / "Lab-04-Data"        
+DATA_DIR = BASE_DIR / "Lab-04-Data"        
 
 
 ### using chroma db with openai embeddings
