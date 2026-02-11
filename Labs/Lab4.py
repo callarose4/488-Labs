@@ -10,6 +10,8 @@ import fitz  # PyMuPDF
 if 'openai_client' not in st.session_state:
     st.session_state.openai_client = OpenAI(api_key=st.secrets.OPEN_API_KEY)
 
+# create or get collection
+collection = client.get_or_create_collection(name="lab4_collection", embedding_function=openai_ef)
 # A function that will add documents to collectiin
 # Collection = collection, already established
 # text = extracted text from PDF files
