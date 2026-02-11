@@ -61,8 +61,6 @@ if collection.count() == 0:
 
 
 
-
-
 def count_tokens(messages, model_name):
     try:
         enc = tiktoken.encoding_for_model(model_name)
