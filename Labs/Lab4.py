@@ -294,15 +294,7 @@ if prompt:
                 "role": "user",
                 "content": f"Give more info about: {st.session_state.last_question}"
             })
-else:
-    if st.session_state.awaiting_more_info and intent == "yes":
-        st.session_state.messages.append({
-            "role": "user",
-            "content": f"Give more info about: {st.session_state.last_question}"
-        })
-    else:
-        st.session_state.last_question = prompt
-        st.session_state.awaiting_more_info = True
+
 
     context_text, sources = get_rag_context(collection, prompt, k=6)
 
@@ -312,18 +304,25 @@ else:
         st.sidebar.write("Context preview:", context_text[:500])
 
     rag_instruction = {
-        "role": "system",
-        "content": (
-            "You are a course information chatbot.\n"
-            "Use ONLY the CONTEXT below to answer the user's question.\n"
-            "If the answer is not in the context, say exactly: "
-            "'I could not find that information in the provided syllabi.'\n"
-            "If you use the context, start your answer with: 'Based on the course documents,'\n"
-            "When possible, be specific and quote small phrases from the context.\n\n"
-            f"CONTEXT:\n{context_text}\n\n"
-            f"SOURCES (filenames): {sources}"
-        )
-    }
+    "role": "system",
+    "content": (
+        "You are a course information chatbot built using a Retrieval-Augmented Generation (RAG) pipeline.\n"
+        "You must answer the user's question using ONLY the CONTEXT provided below.\n"
+        "The CONTEXT comes from official course syllabus documents stored in a vector database.\n\n"
+        "If you use information from the CONTEXT, you must clearly begin your response with:\n"
+        "'Based on the course documents,'\n\n"
+        "If the answer is NOT found in the CONTEXT, respond exactly with:\n"
+        "'I could not find that information in the provided syllabi.'\n\n"
+        "Do NOT use outside knowledge.\n"
+        "Be accurate and specific.\n"
+        "Keep explanations simple and clear.\n\n"
+        "CONTEXT:\n"
+        f"{context_text}\n\n"
+        "SOURCES (filenames):\n"
+        f"{sources}"
+    )
+}
+
 
     messages_to_send = [rag_instruction] + last_two_user_turns(st.session_state.messages)
     messages_to_send = enforce_max_tokens(messages_to_send, model_to_use, MAX_TOKENS)
