@@ -1,19 +1,23 @@
-import streamlit as st
-from openai import OpenAI
-import tiktoken
-import chromadb
-from chromadb.utils import embedding_functions
+import re
 from pathlib import Path
+
+import chromadb
 import fitz  # PyMuPDF
+import streamlit as st
+import tiktoken
+from chromadb.utils import embedding_functions
+from openai import OpenAI
+
 
 # ----------------------------
-# Paths (your PDFs are in Labs/Lab-04-Data)
+# Paths (your PDFs are in Labs/Lab-04-Data per your screenshot)
 # ----------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "Lab-04-Data"
 
+
 # ----------------------------
-# Helpers: PDF text extraction
+# PDF text extraction
 # ----------------------------
 def extract_text_from_pdf(pdf_path: Path) -> str:
     doc = fitz.open(pdf_path)
@@ -23,16 +27,48 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
     doc.close()
     return text
 
+
 # ----------------------------
-# Chroma helpers
+# Chunking + course parsing
+# ----------------------------
+def chunk_text(text: str, chunk_size: int = 1200, overlap: int = 200):
+    """Split text into overlapping chunks to improve retrieval precision."""
+    text = re.sub(r"\s+", " ", text).strip()
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start += max(1, chunk_size - overlap)
+    return chunks
+
+
+def extract_course_code(q: str):
+    """
+    Returns 'IST 314' if the user typed something like 'IST314' or 'IST 314'.
+    Otherwise returns None.
+    """
+    m = re.search(r"\bIST\s*0?(\d{3})\b", q, re.IGNORECASE)
+    if not m:
+        return None
+    return f"IST {m.group(1)}"
+
+
+# ----------------------------
+# Chroma add/load
 # ----------------------------
 def add_to_collection(collection, text: str, file_name: str):
-    # Chroma will embed automatically because the collection has embedding_function=openai_ef
+    chunks = chunk_text(text)
+
+    ids = [f"{file_name}::chunk{i}" for i in range(len(chunks))]
+    metadatas = [{"source": file_name} for _ in chunks]
+
     collection.add(
-        documents=[text],
-        ids=[file_name],
-        metadatas=[{"source": file_name}]
+        documents=chunks,
+        ids=ids,
+        metadatas=metadatas
     )
+
 
 def load_pdfs_to_collection(folder_path: Path, collection) -> bool:
     pdf_files = sorted(folder_path.glob("*.pdf"))
@@ -45,22 +81,64 @@ def load_pdfs_to_collection(folder_path: Path, collection) -> bool:
 
     return True
 
-def get_rag_context(collection, query: str, k: int = 3):
-    """Return (context_text, sources_list) from Chroma for a user query."""
-    results = collection.query(query_texts=[query], n_results=k)
-    docs = results.get("documents", [[]])[0]
-    ids = results.get("ids", [[]])[0]
-    context_text = "\n\n---\n\n".join(docs) if docs else ""
-    return context_text, ids
 
 # ----------------------------
-# OpenAI client (for chat)
+# RAG retrieval
+# (filters to the course syllabus if user mentions IST ###)
+# ----------------------------
+def get_rag_context(collection, query: str, k: int = 6):
+    course = extract_course_code(query)
+
+    # Try querying with metadatas included (different Chroma versions differ).
+    try:
+        results = collection.query(
+            query_texts=[query],
+            n_results=k * 3,  # grab more, then filter down
+            include=["documents", "metadatas", "ids"],
+        )
+        docs = results.get("documents", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        ids = results.get("ids", [[]])[0]
+    except TypeError:
+        # Fallback for older Chroma versions that don't support include=
+        results = collection.query(query_texts=[query], n_results=k * 3)
+        docs = results.get("documents", [[]])[0]
+        ids = results.get("ids", [[]])[0]
+        metas = [{} for _ in docs]  # no metadatas available
+
+    # If they asked about a specific course, keep only chunks from that syllabus filename
+    if course:
+        filtered = []
+        for d, m, i in zip(docs, metas, ids):
+            src = (m or {}).get("source", "")
+            if course.lower() in src.lower():
+                filtered.append((d, src, i))
+        if filtered:
+            docs = [x[0] for x in filtered]
+            sources = sorted({x[1] for x in filtered})
+        else:
+            # If filter finds nothing, fall back to unfiltered
+            sources = sorted({((m or {}).get("source", "") or i.split("::chunk")[0]) for m, i in zip(metas, ids)})
+    else:
+        sources = sorted({((m or {}).get("source", "") or i.split("::chunk")[0]) for m, i in zip(metas, ids)})
+
+    # Keep top-k docs after filtering/fallback
+    docs = docs[:k]
+    context_text = "\n\n---\n\n".join(docs) if docs else ""
+    sources = sources[:5]
+
+    return context_text, sources
+
+
+# ----------------------------
+# OpenAI client (chat)
 # ----------------------------
 if "client" not in st.session_state:
     st.session_state.client = OpenAI(api_key=st.secrets["OPEN_API_KEY"])
 
+
 # ----------------------------
-# ChromaDB (LOCAL) setup (persistent, avoids tenant errors)
+# Chroma local persistent setup (avoids tenant errors)
 # ----------------------------
 if "Lab4_VectorDB" not in st.session_state:
     chroma_client = chromadb.PersistentClient(path=str(BASE_DIR / "chroma_db"))
@@ -77,28 +155,46 @@ if "Lab4_VectorDB" not in st.session_state:
 
 collection = st.session_state.Lab4_VectorDB
 
+
 # ----------------------------
-# Load PDFs once (only if collection is empty)
+# Optional debug + rebuild controls
 # ----------------------------
 debug = st.sidebar.checkbox("Debug RAG", value=False)
 
+st.sidebar.write("Data folder:", str(DATA_DIR))
 if debug:
-    st.sidebar.write("Looking in:", str(DATA_DIR))
-    st.sidebar.write("PDFs:", [p.name for p in DATA_DIR.glob("*.pdf")])
+    st.sidebar.write("PDFs found:", [p.name for p in DATA_DIR.glob("*.pdf")])
 
+# IMPORTANT: chunking requires a fresh DB. Provide a button so you can rebuild easily.
+if st.sidebar.button("Rebuild Vector DB (delete + reload PDFs)"):
+    # This deletes all embeddings in the collection and reloads from PDFs.
+    # It’s safe for this lab.
+    try:
+        all_ids = collection.get().get("ids", [])
+        if all_ids:
+            collection.delete(ids=all_ids)
+    except Exception:
+        # If delete/get behaves differently, just warn and continue
+        pass
+
+    loaded = load_pdfs_to_collection(DATA_DIR, collection)
+    if loaded:
+        st.sidebar.success("Rebuilt vector DB from PDFs.")
+    else:
+        st.sidebar.warning("No PDFs found to load. Check Lab-04-Data folder name/location.")
+
+# If empty, load once
 if collection.count() == 0:
     loaded = load_pdfs_to_collection(DATA_DIR, collection)
     if debug:
-        if loaded:
-            st.sidebar.success("PDFs loaded into ChromaDB collection.")
-        else:
-            st.sidebar.warning("No PDFs found to load.")
+        st.sidebar.write("Loaded PDFs:", loaded)
 
 if debug:
     st.sidebar.write("Collection count:", collection.count())
 
+
 # ----------------------------
-# Token utilities (your existing code)
+# Token utilities
 # ----------------------------
 def count_tokens(messages, model_name):
     try:
@@ -111,6 +207,7 @@ def count_tokens(messages, model_name):
         total += len(enc.encode(m.get("content", "")))
         total += 4
     return total
+
 
 def enforce_max_tokens(messages, model_name, max_tok):
     system = []
@@ -127,6 +224,7 @@ def enforce_max_tokens(messages, model_name, max_tok):
         return system + rest if (system + rest) else system
     return rest if rest else [{"role": "user", "content": "Hi"}]
 
+
 def last_two_user_turns(messages):
     system = [m for m in messages if m["role"] == "system"][:1]
 
@@ -138,6 +236,7 @@ def last_two_user_turns(messages):
     tail = [m for m in messages[start:] if m["role"] != "system"]
     return system + tail
 
+
 def yes_no_intent(text: str) -> str:
     t = text.strip().lower()
     if t in {"yes", "y", "yeah", "yep", "sure", "yea"}:
@@ -145,6 +244,7 @@ def yes_no_intent(text: str) -> str:
     if t in {"no", "n", "nope", "nah"}:
         return "no"
     return "other"
+
 
 def stream_assistant_reply(client, model_to_use, messages_to_send):
     stream = client.chat.completions.create(
@@ -162,6 +262,7 @@ def stream_assistant_reply(client, model_to_use, messages_to_send):
                 full_response += delta
                 box.markdown(full_response)
     return full_response
+
 
 # ----------------------------
 # UI + Chatbot
@@ -188,6 +289,7 @@ if "last_question" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
+# Render chat history
 for msg in st.session_state.messages:
     if msg["role"] == "system":
         continue
@@ -197,6 +299,7 @@ for msg in st.session_state.messages:
 prompt = st.chat_input("Ask me anything!")
 
 if prompt:
+    # store user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -221,28 +324,29 @@ if prompt:
             st.session_state.last_question = prompt
             st.session_state.awaiting_more_info = True
 
-        # -------- RAG: retrieve context from Chroma --------
-        context_text, sources = get_rag_context(collection, prompt, k=3)
+        # -------- RAG retrieval --------
+        context_text, sources = get_rag_context(collection, prompt, k=6)
 
         if debug:
             st.sidebar.write("RAG sources:", sources)
             st.sidebar.write("Context chars:", len(context_text))
-            st.sidebar.write("Context preview:", context_text[:400])
+            st.sidebar.write("Context preview:", context_text[:500])
 
         rag_instruction = {
             "role": "system",
             "content": (
                 "You are a course information chatbot.\n"
-                "Use ONLY the CONTEXT below to answer.\n"
+                "Use ONLY the CONTEXT below to answer the user's question.\n"
                 "If the answer is not in the context, say exactly: "
                 "'I could not find that information in the provided syllabi.'\n"
-                "If you use the context, start your answer with: 'Based on the course documents,'\n\n"
+                "If you use the context, start your answer with: 'Based on the course documents,'\n"
+                "When possible, be specific and quote small phrases from the context.\n\n"
                 f"CONTEXT:\n{context_text}\n\n"
                 f"SOURCES (filenames): {sources}"
             )
         }
 
-        # ✅ THIS is the fixed part: prepend RAG instruction, then send a small chat tail
+        # ✅ Correct message assembly: RAG system message FIRST, then short chat tail
         messages_to_send = [rag_instruction] + last_two_user_turns(st.session_state.messages)
         messages_to_send = enforce_max_tokens(messages_to_send, model_to_use, MAX_TOKENS)
 
