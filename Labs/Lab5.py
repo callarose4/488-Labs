@@ -64,7 +64,7 @@ tools=[
                 "properties": {
                     "location": {
                         "type": "string",
-                        "description": "The city and state, e.g. Syracuse, NY"
+                        "description": "Location in the form 'City, State, Country' (e.g. 'Syracuse, NY, US' or 'Lima, Peru'"
                     }
                 },
                 "required": ["location"]
