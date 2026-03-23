@@ -10,12 +10,13 @@ client = OpenAI (api_key=st.secrets["OPEN_API_KEY"])
 st.subheader ("Ask a question")
 user_question = st.text_input("Your question:", placeholder="e.g. What is the EU AI Act?")
 
-if user_question:
-    with st.spinner("Thinking..."):
-        response = client.responses.create(
-    model="gpt-4o",
-    instructions="You are a helpful research assistant.", 
-    input=user_question
+if st.button("Submit Question"):
+    if user_question:
+        with st.spinner("Thinking..."):
+            response = client.responses.create(
+        model="gpt-4o",
+        instructions="You are a helpful research assistant.", 
+        input=user_question
 )
         st.session_state.last_response=response
         st.session_state.last_response_id=response.id
@@ -26,6 +27,7 @@ if "last_response_id" in st.session_state:
     st.subheader("Ask a follow-up")
     follow_up = st.text_input("Follow-up question:", placeholder="e.g. Can you expand on the second point")
 
+if st.button("Submit Follow-Up"):
     if follow_up:
         with st.spinner("Thinking..."):
             follow_response = client.responses.create(
