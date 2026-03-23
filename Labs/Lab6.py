@@ -17,4 +17,7 @@ if user_question:
     instructions="You are a helpful research assistant.", 
     input=user_question
 )
-st.markdown(response.output_text)
+        st.session_state.last_response=response
+        st.session_state.last_response_id=response.id
+if "last resposne" in st.session_state:
+    st.markdown(st.session_state.last_response.output_text)
