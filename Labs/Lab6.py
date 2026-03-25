@@ -22,25 +22,24 @@ structured_mode = st.sidebar.checkbox(
 )
 
 
-
 if st.button("Submit Question"):
     if user_question:
         with st.spinner("Thinking..."):
             if structured_mode:
                 response = client.responses.parse(
-        model="gpt-4o",
-        instructions="You are a helpful research assistant.", 
-        input=user_question,
-        text_format=ResearchSummary,
-        )
-    else: 
-        response = client.responses.create(
-            model="gpt-4o",
-            instructions="You are a helpful research assistant.",
-            input=user_question
-        )
-        st.session_state.last_response=response
-        st.session_state.last_response_id=response.id
+                    model="gpt-4o",
+                    instructions="You are a helpful research assistant.",
+                    input=user_question,
+                    text_format=ResearchSummary,
+                )
+            else:
+                response = client.responses.create(
+                    model="gpt-4o",
+                    instructions="You are a helpful research assistant.",
+                    input=user_question,
+                )
+        st.session_state.last_response = response
+        st.session_state.last_response_id = response.id
         st.session_state.structured = structured_mode
 
 if "last_response" in st.session_state:
@@ -48,9 +47,9 @@ if "last_response" in st.session_state:
         summary = st.session_state.last_response.output_parsed
         st.markdown(summary.main_answer)
         for fact in summary.key_facts:
-            st.markdown(f"-{fact}")
+            st.markdown(f"- {fact}")
         st.caption(summary.source_hint)
-    else: 
+    else:
         st.markdown(st.session_state.last_response.output_text)
 
 if "last_response_id" in st.session_state:
