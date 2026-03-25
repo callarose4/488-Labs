@@ -33,7 +33,6 @@ if st.button("Submit Question"):
         input=user_question,
         text_format=ResearchSummary,
         )
-
     else: 
         response = client.responses.create(
             model="gpt-4o",
