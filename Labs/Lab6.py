@@ -18,7 +18,7 @@ user_question = st.text_input("Your question:", placeholder="e.g. What is the EU
 
 
 structured_mode = st.sidebar.checkbox(
-    "Return strcuted summary",
+    "Return structured summary",
 )
 
 
@@ -41,10 +41,12 @@ if st.button("Submit Question"):
         )
         st.session_state.last_response=response
         st.session_state.last_response_id=response.id
-if "last response" in st.session_state:
+        st.session_state.structured = structured_mode
+
+if "last_response" in st.session_state:
     if st.session_state.structured:
         summary = st.session_state.last_response.output_parsed
-        st.markdwon(summary.main_answer)
+        st.markdown(summary.main_answer)
         for fact in summary.key_facts:
             st.markdown(f"-{fact}")
         st.caption(summary.source_hint)
