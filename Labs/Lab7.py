@@ -1,25 +1,57 @@
+# Lab 7: Running a Local Model
+# Requires Ollama installed and running locally (ollama.com)
+
+
 import streamlit as st
-from ollama import chat
+
+# Check if ollama is available
+try:
+    from ollama import chat
+    ollama_available = True
+except ImportError:
+    ollama_available = False
 
 # Page setup
 st.title("Local AI Chatbot")
 st.caption("Powered by Ollama - running entirely offline")
 
-# Sidebar for model selection (helps with reflection - comparing models)
+# Check for Ollama connection
+def check_ollama_connection():
+    try:
+        from ollama import list as ollama_list
+        ollama_list()
+        return True
+    except Exception:
+        return False
+
+if not ollama_available:
+    st.error("The `ollama` Python package is not installed. Run `pip install ollama` to install it.")
+    st.stop()
+
+if not check_ollama_connection():
+    st.warning("⚠️ Cannot connect to Ollama server. This app requires Ollama to be installed and running locally.")
+    st.info(
+        "**To run this app locally:**\n"
+        "1. Download and install Ollama from [ollama.com](https://ollama.com)\n"
+        "2. Open a terminal and run: `ollama pull qwen3:4b` and `ollama pull mistral`\n"
+        "3. Run this app locally with: `streamlit run Labs/Lab7.py`\n\n"
+        "This app cannot run on Streamlit Cloud because it requires a local Ollama server. "
+        "That is the core concept of this lab - running LLMs on your own hardware instead of through a cloud API."
+    )
+    st.stop()
+
 model_choice = st.sidebar.selectbox(
     "Select Model",
-    ["qwen3:4b", "mistral", "llama3.2:1b"],
+    ["qwen3:4b", "mistral"],
     index=0
 )
 
-# Toggle for web search (Part D)
 use_web_search = st.sidebar.toggle("Enable Web Search", value=False)
 
 # Initialize message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Button to clear chat when switching models
 if st.sidebar.button("Clear Chat"):
     st.session_state.messages = []
     st.rerun()
@@ -64,7 +96,6 @@ if prompt := st.chat_input("Ask a question", key="chat_input"):
     # Add web search tool if enabled (Part D)
     if use_web_search:
         chat_kwargs["tools"] = [web_search_tool]
-        # When tools are enabled, streaming may not work the same way
         chat_kwargs["stream"] = False
         response = chat(**chat_kwargs)
 
@@ -77,13 +108,11 @@ if prompt := st.chat_input("Ask a question", key="chat_input"):
             from ollama import web_search as ollama_web_search
             try:
                 search_result = ollama_web_search(query)
-                # Add the tool response back to the conversation
                 st.session_state.messages.append({"role": "assistant", "content": response.message.content or ""})
                 st.session_state.messages.append({
                     "role": "tool",
                     "content": str(search_result)
                 })
-                # Get a final response incorporating the search results
                 follow_up = chat(
                     model=model_choice,
                     messages=st.session_state.messages,
@@ -91,7 +120,6 @@ if prompt := st.chat_input("Ask a question", key="chat_input"):
                 )
                 full_response = follow_up.message.content
             except Exception:
-                # Fallback: just use the original response
                 full_response = response.message.content or "I tried to search the web but encountered an error."
         else:
             full_response = response.message.content
@@ -99,7 +127,7 @@ if prompt := st.chat_input("Ask a question", key="chat_input"):
         with st.chat_message("assistant"):
             st.write(full_response)
     else:
-        # Standard streaming response (Part C)
+       
         stream = chat(**chat_kwargs)
         with st.chat_message("assistant"):
             def stream_response():
