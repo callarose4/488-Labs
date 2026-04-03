@@ -29,7 +29,7 @@ if not ollama_available:
     st.stop()
 
 if not check_ollama_connection():
-    st.warning("⚠️ Cannot connect to Ollama server. This app requires Ollama to be installed and running locally.")
+    st.warning("Cannot connect to Ollama server. This app requires Ollama to be installed and running locally.")
     st.info(
         "**To run this app locally:**\n"
         "1. Download and install Ollama from [ollama.com](https://ollama.com)\n"
