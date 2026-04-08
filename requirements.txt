@@ -4,3 +4,4 @@ pymupdf
 tiktoken
 chromadb
 ollama
+requests
