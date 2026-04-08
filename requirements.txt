@@ -3,5 +3,4 @@ openai
 pymupdf
 tiktoken
 chromadb
-ollama
 requests
