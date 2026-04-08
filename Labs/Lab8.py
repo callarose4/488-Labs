@@ -18,7 +18,7 @@ if "url_response" not in st.session_state:
 
 if st.button("Generate Music Recommendation from URL") and url:
     st.session_state.url_response = client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-4o",
         max_tokens=1024,
         messages=[
             {"role": "user",
@@ -42,7 +42,7 @@ if st.button("Generate Music Recommendation from Upload") and uploaded:
     mime = uploaded.type
     data_uri = f"data:{mime};base64,{b64}"
     st.session_state.upload_response = client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-4o",
         max_tokens=1024,
         messages=[
             {"role": "user",
