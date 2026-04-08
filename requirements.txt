@@ -5,4 +5,3 @@ tiktoken
 chromadb
 ollama
 requests
-base64
